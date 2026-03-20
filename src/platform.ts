@@ -39,17 +39,21 @@ interface LgNetcastPlatformConfig extends PlatformConfig {
 }
 
 export class LgNetcastPlatform implements DynamicPlatformPlugin {
-  public readonly Service: typeof Service = this.api.hap.Service;
-  public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
+  public readonly Service: typeof Service;
+  public readonly Characteristic: typeof Characteristic;
   public readonly deviceConfig: DeviceConfig[];
 
   // this is used to track restored cached accessories
   public readonly devices: PlatformAccessory[] = [];
 
   constructor(public readonly log: Logger, public readonly config: LgNetcastPlatformConfig, public readonly api: API) {
+    this.Service = this.api.hap.Service;
+    this.Characteristic = this.api.hap.Characteristic;
+
     this.log.debug('Finished initializing platform:', this.config.name);
 
-    if (config.devices === undefined) {
+    if (!config.devices || config.devices.length === 0) {
+      this.log.warn('No devices configured. Please add devices in the Homebridge config.');
       config.devices = [];
     }
 
@@ -66,7 +70,7 @@ export class LgNetcastPlatform implements DynamicPlatformPlugin {
     this.devices.push(accessory);
   }
 
-  removeAccessory(accessory) {
+  removeAccessory(accessory: PlatformAccessory) {
     this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
   }
 

@@ -1,10 +1,8 @@
 # homebridge-netcast-tv
 
-Homebridge plugin for interacting with LG Netcast-based TVs (2012, 2013)
+Homebridge plugin for interacting with LG Netcast-based TVs (2012, 2013).
 
-**Warning:** This is very much a proof of concept to get my TV working. It might work for you, and it might also not.
-
-<!-- MarkdownTOC autolink="true" -->
+> **Fork note**: This is a modernized fork of [dvcrn/homebridge-netcast-tv](https://github.com/dvcrn/homebridge-netcast-tv), updated for Homebridge 2.x and the current verified plugin requirements.
 
 - [Installation](#installation)
 - [Setup](#setup)
@@ -15,9 +13,6 @@ Homebridge plugin for interacting with LG Netcast-based TVs (2012, 2013)
     - [Turning on the TV](#turning-on-the-tv)
     - [Switching between HDMI and TV](#switching-between-hdmi-and-tv)
 - [What is working](#what-is-working)
-- [ETC](#etc)
-
-<!-- /MarkdownTOC -->
 
 ## Installation
 
@@ -25,7 +20,9 @@ Homebridge plugin for interacting with LG Netcast-based TVs (2012, 2013)
 npm install -g homebridge-netcast-tv
 ```
 
-TVs are exposed as separate accessories that you need to pair. This is a restriction of the HomeKit API, so after adding this accessory check your log files for the pairing code:
+Or search for "Netcast TV" in the Homebridge UI plugins tab.
+
+TVs are exposed as separate accessories that need manual pairing. After adding this plugin, check your log files for the pairing code:
 
 ```
 [11/24/2020, 8:29:52 PM] LG TV is running on port 60335.
@@ -46,12 +43,32 @@ netcast-cli --command access_token --host 192.168.1.6
 
 ## Configuration
 
-Add the platform to your config.json:
+You can configure this plugin through the Homebridge UI Settings panel, or manually in your `config.json`:
+
+```json
+"platforms": [
+    {
+        "platform": "netcasttv",
+        "devices": [
+            {
+                "name": "LG TV",
+                "host": "192.168.1.14",
+                "mac": "cc:2d:8c:a4:4a:d6",
+                "accessToken": "xxxxx",
+                "keyInputDelay": 600,
+                "offPauseDuration": 600000,
+                "channels": []
+            }
+        ]
+    }
+]
+```
 
 - `name`: Name of the accessory
 - `host`: IP of your TV
-- `mac`: Mac address of the TV
+- `mac`: MAC address of the TV
 - `accessToken`: Pair code of the TV
+- `model`: (optional) Model name shown in HomeKit accessory info
 - `keyInputDelay`: Delay in ms to wait before issuing repeated key presses (such as switching input source)
 - `offPauseDuration`: Delay in ms to pause polling for TV status after turning off. This is needed because the TV still responds to channel query requests when it has been turned off
 - `channels`: List of channels that are available
@@ -72,7 +89,7 @@ Querying current channel
   minor: '65535',
   displayMinor: '-1',
   chname: 'フジテレビ',
-  progName: 'ザ・ノンフィクション　たたかれても　たたかれても…　〜山根明と妻のその 後〜',
+  progName: '...',
   audioCh: '0',
   inputSourceName: 'TV',
   inputSourceType: '0',
@@ -81,85 +98,73 @@ Querying current channel
 }
 ```
 
-Important notes here are:
+**For HDMI devices**: Specify only `inputSourceType` and `inputSourceIdx`. Set `type` to `"external"`.
 
-**For HDMI devices**: Specify only `inputSourceType` and `inputSourceIdx`. Set `type` to "hdmi", this is very important!
-
-**For channels**: Specify `type` = "tv" and the following keys:
-
-```
-"sourceIndex": "1",
-"physicalNum": "25",
-"major": "41",
-"minor": "65535",
-"inputSourceType": "0",
-"inputSourceIdx": "0"
-```
+**For channels**: Specify `type` = `"tv"` and include `sourceIndex`, `physicalNum`, `major`, `minor`, `inputSourceType`, and `inputSourceIdx`.
 
 ### Example config
 
-```
- "platforms": [
-        {
-            "platform": "LgNetcast",
-            "name": "LGPlatform",
-            "accessories": [
-                {
-                    "accessory": "LgNetcastTV",
-                    "name": "TestTV",
-                    "host": "192.168.1.14",
-                    "mac": "cc:2d:8c:a4:4a:d6",
-                    "accessToken": "xxxxx",
-                    "keyInputDelay": 600,
-                    "offPauseDuration": 600000,
-                    "channels": [
-                        {
-                            "name": "AppleTV",
-                            "type": "external",
-                            "channel": {
-                                "inputSourceType": "6",
-                                "inputSourceIdx": "3"
-                            }
-                        },
-                        {
-                            "name": "Chromecast",
-                            "type": "external",
-                            "channel": {
-                                "inputSourceType": "6",
-                                "inputSourceIdx": "4"
-                            }
-                        },
-                        {
-                            "name": "Nihon TV",
-                            "type": "tv",
-                            "channel": {
-                                "sourceIndex": "1",
-                                "physicalNum": "25",
-                                "major": "41",
-                                "minor": "65535",
-                                "inputSourceType": "0",
-                                "inputSourceIdx": "0"
-                            }
-                        },
+```json
+"platforms": [
+    {
+        "platform": "netcasttv",
+        "devices": [
+            {
+                "name": "LG TV",
+                "host": "192.168.1.14",
+                "mac": "cc:2d:8c:a4:4a:d6",
+                "accessToken": "xxxxx",
+                "keyInputDelay": 600,
+                "offPauseDuration": 600000,
+                "channels": [
+                    {
+                        "name": "AppleTV",
+                        "type": "external",
+                        "channel": {
+                            "inputSourceType": "6",
+                            "inputSourceIdx": "3"
+                        }
+                    },
+                    {
+                        "name": "Chromecast",
+                        "type": "external",
+                        "channel": {
+                            "inputSourceType": "6",
+                            "inputSourceIdx": "4"
+                        }
+                    },
+                    {
+                        "name": "Nihon TV",
+                        "type": "tv",
+                        "channel": {
+                            "sourceIndex": "1",
+                            "physicalNum": "25",
+                            "major": "41",
+                            "minor": "65535",
+                            "inputSourceType": "0",
+                            "inputSourceIdx": "0"
+                        }
                     }
-                }
-            ]
-        }
+                ]
+            }
+        ]
+    }
+]
 ```
 
 ## Caveats
 
 ### Turning on the TV
 
-This is **not** supported. It's just not possible through the Netcast API nor wakeonlan, so as a workaround, use automations and HDMI CEC through LG Simplink. Turning the TV on itself won't do anything except setting the TV state to "on".
+This is **not** supported. It's not possible through the Netcast API nor Wake-on-LAN. As a workaround, use automations and HDMI CEC through LG Simplink. Setting the TV state to "on" in HomeKit won't turn on the hardware — it only updates the state.
 
-For example, use an AppleTV or Chromecast, and turn it on when the TV state turns to "on". (I personally use [homebridge-apple-tv-remote](https://www.npmjs.com/package/homebridge-apple-tv-remote) and turn the ATV on when my TV turns on.)
+For example, use an AppleTV or Chromecast, and turn it on when the TV state turns to "on". ([homebridge-apple-tv-remote](https://www.npmjs.com/package/homebridge-apple-tv-remote) works well for this.)
 
 ### Switching between HDMI and TV
 
-This is also **not** supported through the Netcast API. The workaround that this plugin uses is to manually open the input source menu, then physically clicking LEFT/RIGHT, then hitting "OK". That's also why the `inputSourceIdx` key is needed for everything.
+This is also **not** directly supported through the Netcast API. The workaround this plugin uses is to open the input source menu, then send LEFT/RIGHT arrow keys, then hit "OK". That's why the `inputSourceIdx` key is needed for everything.
 
-To change the interval in which keys are being issued, change the `keyInputDelay` config key. For my TV the UI loads really slow, so I had to set it between 600 - 1000ms.
+To change the interval between key presses, adjust the `keyInputDelay` config key. For slower TV UIs, try 600–1000ms.
 
 ## What is working
 
@@ -170,6 +175,7 @@ To change the interval in which keys are being issued, change the `keyInputDelay
 - Controlling the TV through the remote API
 - Changing volume
 
-## ETC
+## Credits
 
-Powered by https://github.com/dvcrn/lg-netcast
+Powered by [lg-netcast](https://github.com/dvcrn/lg-netcast).
+Original plugin by [dvcrn](https://github.com/dvcrn).

@@ -2,8 +2,6 @@ import {
   Service,
   PlatformAccessory,
   CharacteristicValue,
-  CharacteristicSetCallback,
-  CharacteristicGetCallback,
 } from 'homebridge';
 import { LgNetcastPlatform, DeviceConfig, ChannelType } from './platform';
 import { PLUGIN_NAME } from './settings';
@@ -31,8 +29,8 @@ export class LgNetcastTV {
     deviceConfig.mac = deviceConfig.mac || '00:00:00:00:00';
     deviceConfig.accessToken = deviceConfig.accessToken || '';
     deviceConfig.channels = deviceConfig.channels || [];
-    deviceConfig.keyInputDelay = deviceConfig.keyInputDelay || 600; // delay between issuing commands
-    deviceConfig.offPauseDuration = deviceConfig.offPauseDuration || 600000; // how long to wait after turning off before polling again
+    deviceConfig.keyInputDelay = deviceConfig.keyInputDelay || 600;
+    deviceConfig.offPauseDuration = deviceConfig.offPauseDuration || 600000;
 
     // Append port if needed
     if (deviceConfig.host.indexOf(':') === -1) {
@@ -85,14 +83,11 @@ export class LgNetcastTV {
     platform.api.publishExternalAccessories(PLUGIN_NAME, [this.accessory]);
   }
 
-  /**
-   * Initializes the tv accessory itself
-   */
   initTvAccessory() {
     this.accessory
       .getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'LG')
-      .setCharacteristic(this.platform.Characteristic.Model, this.deviceConfig.model)
+      .setCharacteristic(this.platform.Characteristic.Model, this.deviceConfig.model || 'Netcast TV')
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.deviceConfig.mac);
   }
 
@@ -107,106 +102,70 @@ export class LgNetcastTV {
         this.platform.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE,
       );
 
-    // register handlers for the On/Off Characteristic
     this.service
       .getCharacteristic(this.platform.Characteristic.Active)
-      .on('set', async (value: CharacteristicValue, callback: CharacteristicSetCallback) => {
+      .onSet(async (value: CharacteristicValue) => {
         if (value) {
-          this.platform.log.debug('TV state changed to on, however I cant turn it on. Just updating state isntead');
+          this.platform.log.debug('TV state changed to on, however turning on is not supported via Netcast API.');
           this.platform.log.debug('Use automations to turn the TV on, such as pinging an AppleTV.');
 
           if (this.offTimeout !== null) {
             clearTimeout(this.offTimeout);
             this.offPause = false;
           }
-
-          callback(null, true);
           return;
         }
 
-        // After turning off, issue a pause timeout for waiting with polling again
-        // Netcast TVs take a while before they deactivate their network card, so without the timeout
-        // it would just immediately appear as "on" again
-        await this.sendAuthorizedCommand(LG_COMMAND.POWER);
+        try {
+          await this.sendAuthorizedCommand(LG_COMMAND.POWER);
+        } catch (e) {
+          this.platform.log.error('Failed to send power off command:', (e as Error).message);
+          throw new this.platform.api.hap.HapStatusError(
+            this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
+          );
+        }
+
         this.platform.log.debug(
-          `TV turned off. Going to wait ${this.deviceConfig.offPauseDuration}ms before starting to poll for status again.`,
+          `TV turned off. Waiting ${this.deviceConfig.offPauseDuration}ms before polling status again.`,
         );
         this.offPause = true;
         this.offTimeout = setTimeout(() => {
           this.offPause = false;
-          this.platform.log.debug('Off pause timeout cleared. Going to start polling again.');
+          this.platform.log.debug('Off pause timeout cleared. Polling resumed.');
         }, this.deviceConfig.offPauseDuration);
-        callback(null, false);
       })
-      .on('get', (callback: CharacteristicGetCallback) => {
+      .onGet(() => {
         this.platform.log.debug('Querying TV state...');
-        if (this.currentChannel === null) {
-          return callback(null, false);
-        }
-
-        return callback(null, true);
+        return this.currentChannel !== null;
       });
   }
 
   initRemoteControlService() {
-    this.service.getCharacteristic(this.platform.Characteristic.RemoteKey).on('set', async (newValue, callback) => {
-      switch (newValue) {
-        case this.platform.Characteristic.RemoteKey.REWIND: {
-          await this.sendAuthorizedCommand(LG_COMMAND.REWIND);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.FAST_FORWARD: {
-          await this.sendAuthorizedCommand(LG_COMMAND.FAST_FORWARD);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.NEXT_TRACK: {
-          await this.sendAuthorizedCommand(LG_COMMAND.SKIP_FORWARD);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.PREVIOUS_TRACK: {
-          await this.sendAuthorizedCommand(LG_COMMAND.SKIP_BACKWARD);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.ARROW_UP: {
-          await this.sendAuthorizedCommand(LG_COMMAND.UP);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.ARROW_DOWN: {
-          await this.sendAuthorizedCommand(LG_COMMAND.DOWN);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.ARROW_LEFT: {
-          await this.sendAuthorizedCommand(LG_COMMAND.LEFT);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.ARROW_RIGHT: {
-          await this.sendAuthorizedCommand(LG_COMMAND.RIGHT);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.SELECT: {
-          await this.sendAuthorizedCommand(LG_COMMAND.OK);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.BACK: {
-          await this.sendAuthorizedCommand(LG_COMMAND.BACK);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.EXIT: {
-          await this.sendAuthorizedCommand(LG_COMMAND.EXIT);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.PLAY_PAUSE: {
-          await this.sendAuthorizedCommand(LG_COMMAND.PLAY);
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.INFORMATION: {
-          await this.sendAuthorizedCommand(LG_COMMAND.PROGRAM_INFORMATION);
-          break;
+    this.service.getCharacteristic(this.platform.Characteristic.RemoteKey).onSet(async (newValue: CharacteristicValue) => {
+      const commandMap: Record<number, LG_COMMAND> = {
+        [this.platform.Characteristic.RemoteKey.REWIND]: LG_COMMAND.REWIND,
+        [this.platform.Characteristic.RemoteKey.FAST_FORWARD]: LG_COMMAND.FAST_FORWARD,
+        [this.platform.Characteristic.RemoteKey.NEXT_TRACK]: LG_COMMAND.SKIP_FORWARD,
+        [this.platform.Characteristic.RemoteKey.PREVIOUS_TRACK]: LG_COMMAND.SKIP_BACKWARD,
+        [this.platform.Characteristic.RemoteKey.ARROW_UP]: LG_COMMAND.UP,
+        [this.platform.Characteristic.RemoteKey.ARROW_DOWN]: LG_COMMAND.DOWN,
+        [this.platform.Characteristic.RemoteKey.ARROW_LEFT]: LG_COMMAND.LEFT,
+        [this.platform.Characteristic.RemoteKey.ARROW_RIGHT]: LG_COMMAND.RIGHT,
+        [this.platform.Characteristic.RemoteKey.SELECT]: LG_COMMAND.OK,
+        [this.platform.Characteristic.RemoteKey.BACK]: LG_COMMAND.BACK,
+        [this.platform.Characteristic.RemoteKey.EXIT]: LG_COMMAND.EXIT,
+        [this.platform.Characteristic.RemoteKey.PLAY_PAUSE]: LG_COMMAND.PLAY,
+        [this.platform.Characteristic.RemoteKey.INFORMATION]: LG_COMMAND.PROGRAM_INFORMATION,
+      };
+
+      const cmd = commandMap[newValue as number];
+      if (cmd !== undefined) {
+        try {
+          await this.sendAuthorizedCommand(cmd);
+        } catch (e) {
+          this.platform.log.error('Failed to send remote command:', (e as Error).message);
         }
       }
-
-      // don't forget to callback!
-      callback(null);
     });
   }
 
@@ -222,56 +181,55 @@ export class LgNetcastTV {
         this.platform.Characteristic.VolumeControlType.RELATIVE,
       );
 
-    // handle volume control
     speakerService
       .getCharacteristic(this.platform.Characteristic.VolumeSelector)
-      .on('set', async (newValue, callback) => {
-        if (newValue === 0) {
-          await this.sendAuthorizedCommand(LG_COMMAND.VOLUME_UP);
-        } else {
-          await this.sendAuthorizedCommand(LG_COMMAND.VOLUME_DOWN);
+      .onSet(async (newValue: CharacteristicValue) => {
+        try {
+          if (newValue === 0) {
+            await this.sendAuthorizedCommand(LG_COMMAND.VOLUME_UP);
+          } else {
+            await this.sendAuthorizedCommand(LG_COMMAND.VOLUME_DOWN);
+          }
+        } catch (e) {
+          this.platform.log.error('Failed to send volume command:', (e as Error).message);
         }
-        callback(null);
       });
   }
 
   initInputSources() {
-    // Handler for when the user switches to a different input source
     this.service
       .getCharacteristic(this.platform.Characteristic.ActiveIdentifier)
-      .on('set', async (newValue, callback) => {
-        // the value will be the value you set for the Identifier Characteristic
-        // on the Input Source service that was selected - see input sources below.
+      .onSet(async (newValue: CharacteristicValue) => {
         this.platform.log.info('set Active Identifier => setNewValue: ' + newValue);
 
-        // if unknown identifier, just update it without doing anything
         if (newValue === this.unknownChannelIdentifier) {
-          callback(null);
           return;
         }
 
-        const newChannel = this.deviceConfig.channels[newValue];
+        const newChannel = this.deviceConfig.channels[newValue as number];
         const currentChannel = this.currentChannel;
 
         this.channelUpdateInProgress = true;
-        if (newChannel.channel.inputSourceIdx !== undefined) {
-          // if different inputsourceidx, we have to manually switch to the channel
-          if (newChannel.channel.inputSourceIdx !== currentChannel?.inputSourceIdx) {
-            await this.switchToSourceIdx(parseInt(newChannel.channel.inputSourceIdx));
-            await this.wait(3000);
+        try {
+          if (newChannel.channel.inputSourceIdx !== undefined) {
+            if (newChannel.channel.inputSourceIdx !== currentChannel?.inputSourceIdx) {
+              await this.switchToSourceIdx(parseInt(newChannel.channel.inputSourceIdx));
+              await this.wait(3000);
+            }
           }
-        }
 
-        if (newChannel.type === ChannelType.TV) {
-          const sessionId = await this.netcastClient.get_session(this.deviceConfig.accessToken);
-          await this.netcastClient.change_channel(newChannel.channel, sessionId);
+          if (newChannel.type === ChannelType.TV) {
+            const sessionId = await this.netcastClient.get_session(this.deviceConfig.accessToken);
+            await this.netcastClient.change_channel(newChannel.channel, sessionId);
+          }
+        } catch (e) {
+          this.platform.log.error('Failed to switch input:', (e as Error).message);
+        } finally {
+          this.channelUpdateInProgress = false;
         }
-
-        this.channelUpdateInProgress = false;
-        callback(null);
       });
 
-    // Init all configurated user channels if they don't exist yet
+    // Init all configured user channels
     for (const [i, chan] of this.deviceConfig.channels.entries()) {
       let existingChanService = this.findInputService(chan.name);
       if (existingChanService === null) {
@@ -279,7 +237,6 @@ export class LgNetcastTV {
         existingChanService = this.accessory.addService(this.platform.Service.InputSource, chan.name, chan.name);
       }
 
-      // set characteristics
       existingChanService
         .setCharacteristic(this.platform.Characteristic.ConfiguredName, chan.name)
         .setCharacteristic(this.platform.Characteristic.Identifier, i)
@@ -295,16 +252,12 @@ export class LgNetcastTV {
       this.service.addLinkedService(existingChanService);
     }
 
-    // === Remove input sources that are no longer being used
-
-    // Create map for easier access
-    const channelNameMap = {};
+    // Remove input sources that are no longer configured
+    const channelNameMap: Record<string, null> = {};
     for (const c of this.deviceConfig.channels) {
       channelNameMap[c.name] = null;
     }
 
-    // Iterate through all the currently linked services
-    // If the service displayName is not inside the access map, remove it
     for (const ser of this.accessory.services) {
       for (const linkedSer of ser.linkedServices) {
         if (channelNameMap[linkedSer.displayName] === undefined) {
@@ -322,30 +275,12 @@ export class LgNetcastTV {
     });
   }
 
-  /**
-   * Sends an authorized command to the TV
-   * authorized meaning a valid session will be used for issuing the command
-   *
-   * @param      {LG_COMMAND}  cmd     The command
-   */
   async sendAuthorizedCommand(cmd: LG_COMMAND) {
     this.platform.log.debug('Sending command to TV: ', cmd, LG_COMMAND[cmd]);
     const sessionId = await this.netcastClient.get_session(this.deviceConfig.accessToken);
     return this.netcastClient.send_command(cmd, sessionId);
   }
 
-  /**
-   * Switches the TV to the given inputsource idx This will literally open the
-   * input source selector and click LEFT/RIGHT enough times to reach the target
-   * channel. This is a VERY hacky way of doing this, but the netcast API
-   * doesn't allow any other way You can't switch from HDMI to a channel and you
-   * can't switch from a channel back to HDMI
-   *
-   * Instead of this way, it would be much better to use Simplink and HDMI
-   * through an AppleTV or Chromecast
-   *
-   * @param      {number}  idx     The index to switch to
-   */
   async switchToSourceIdx(idx: number) {
     const currentIdxStr = this.currentChannel?.inputSourceIdx;
     if (currentIdxStr === undefined) {
@@ -353,8 +288,6 @@ export class LgNetcastTV {
     }
 
     const currentIdx = parseInt(currentIdxStr);
-
-    // nothing to do here
     if (currentIdx === idx) {
       return;
     }
@@ -362,14 +295,10 @@ export class LgNetcastTV {
     this.platform.log.debug('Request to switch to input source idx: ', idx);
     this.platform.log.debug('Current source idx: ', currentIdx);
 
-    // Open input source switch menu and wait 2s
-    // 2s because sometimes this menu can be pretty slow to load...
     this.platform.log.debug('Opening InputSource selection');
     await this.sendAuthorizedCommand(LG_COMMAND.EXTERNAL_INPUT);
     await this.wait(2000);
 
-    // Click LEFT/RIGHT enough times for us to reach the target channel
-    // Then click "OK" to select it
     if (currentIdx > idx) {
       const diff = currentIdx - idx - 1;
       for (let i = 1; i <= diff; i++) {
@@ -389,9 +318,6 @@ export class LgNetcastTV {
     }
   }
 
-  /**
-   * Updates the current channel state
-   */
   async updateCurrentChannel() {
     if (this.offPause) {
       return;
@@ -408,13 +334,10 @@ export class LgNetcastTV {
       return;
     }
 
-    // Check if we are currently switching channels. If yes, don't do anything to not interfere
     if (this.channelUpdateInProgress) {
       return;
     }
 
-    // check all existing channels and see if the current channel matches with either of them
-    // if it does, update the active input source to that
     for (const [i, chan] of this.deviceConfig.channels.entries()) {
       if (
         (chan.type === ChannelType.EXTERNAL && chan.channel.inputSourceIdx === this.currentChannel.inputSourceIdx) ||
@@ -447,7 +370,6 @@ export class LgNetcastTV {
 
   updateWildcardChannel(name: string) {
     this.platform.log.debug(`Creating temporary channel with name '${name}'`);
-    // add extra accessory for UNKNOWN
     let existingChanService = this.findInputService(this.unknownChannelName);
     if (existingChanService === null) {
       existingChanService = this.accessory.addService(

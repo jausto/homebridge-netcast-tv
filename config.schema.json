@@ -3,105 +3,114 @@
   "pluginType": "platform",
   "singular": true,
   "headerDisplay": "Homebridge plugin for LG Netcast TVs",
-  "footerDisplay": "For a detailed description, see the [README](https://github.com/dvcrn/homebridge-netcast-tv)",
+  "footerDisplay": "For a detailed description, see the [README](https://github.com/jausto/homebridge-netcast-tv)",
   "schema": {
-    "devices": {
-      "title": "Devices",
-      "type": "array",
-      "required": true,
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "title": "Name",
-            "description": "The name of your TV.",
-            "type": "string",
-            "default": "LG TV",
-            "minLength": 1,
-            "required": true
-          },
-          "host": {
-            "title": "TV ip address",
-            "description": "The ip address of your TV.",
-            "type": "string",
-            "format": "ipv4",
-            "required": true
-          },
-          "mac": {
-            "title": "TV mac address",
-            "description": "The mac address of your TV.",
-            "type": "string",
-            "required": true
-          },
-          "accessToken": {
-            "title": "TV access token",
-            "description": "Access token of the TV",
-            "type": "string",
-            "required": true
-          },
-          "keyInputDelay": {
-            "title": "Key Input Delay",
-            "description": "Time in ms to wait between key presses.",
-            "type": "number",
-            "default": 600
-          },
-          "offPauseDuration": {
-            "title": "Pause Duration after turning off",
-            "description": "Time in ms to wait before polling the status again.",
-            "type": "number",
-            "default": 600000
-          },
-          "channels": {
-            "type": "array",
-            "description": "Check the [README](https://github.com/dvcrn/homebridge-netcast-tv#regarding-channels) for infos on Channels",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "title": "Name",
-                  "description": "The name of the Channel.",
-                  "type": "string",
-                  "minLength": 1,
-                  "required": true
-                },
-                "type": {
-                  "title": "Channel Type",
-                  "description": "Whether the channel is TV or External (such as HDMI).",
-                  "type": "string",
-                  "minLength": 1,
-                  "required": true,
-                  "enum": ["tv", "external"]
-                },
-                "channel": {
-                  "type": "object",
-                  "properties": {
-                    "inputSourceType": {
-                      "type": "string",
-                      "title": "inputSourceType"
-                    },
-                    "inputSourceIdx": {
-                      "type": "string",
-                      "title": "inputSourceIdx"
-                    },
-                    "sourceIndex": {
-                      "type": "string",
-                      "title": "sourceIndex"
-                    },
-                    "physicalNum": {
-                      "type": "string",
-                      "title": "physicalNum"
-                    },
-                    "major": {
-                      "type": "string",
-                      "title": "major"
-                    },
-                    "minor": {
-                      "type": "string",
-                      "title": "minor"
-                    },
-                    "minor": {
-                      "type": "string",
-                      "title": "minor"
+    "type": "object",
+    "properties": {
+      "devices": {
+        "title": "Devices",
+        "type": "array",
+        "required": true,
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Name",
+              "description": "The name of your TV.",
+              "type": "string",
+              "default": "LG TV",
+              "minLength": 1,
+              "required": true
+            },
+            "host": {
+              "title": "TV IP Address",
+              "description": "The IP address of your TV.",
+              "type": "string",
+              "format": "ipv4",
+              "required": true
+            },
+            "mac": {
+              "title": "TV MAC Address",
+              "description": "The MAC address of your TV.",
+              "type": "string",
+              "required": true
+            },
+            "accessToken": {
+              "title": "TV Access Token",
+              "description": "Access token of the TV.",
+              "type": "string",
+              "required": true
+            },
+            "model": {
+              "title": "TV Model",
+              "description": "Model name of the TV (shown in HomeKit accessory info).",
+              "type": "string",
+              "default": "Netcast TV"
+            },
+            "keyInputDelay": {
+              "title": "Key Input Delay",
+              "description": "Time in ms to wait between key presses.",
+              "type": "number",
+              "default": 600,
+              "minimum": 100,
+              "maximum": 5000
+            },
+            "offPauseDuration": {
+              "title": "Pause Duration After Turning Off",
+              "description": "Time in ms to wait before polling the status again after turning off.",
+              "type": "number",
+              "default": 600000,
+              "minimum": 10000
+            },
+            "channels": {
+              "title": "Channels",
+              "type": "array",
+              "description": "Check the [README](https://github.com/jausto/homebridge-netcast-tv#regarding-channels) for info on Channels.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "title": "Name",
+                    "description": "The name of the Channel.",
+                    "type": "string",
+                    "minLength": 1,
+                    "required": true
+                  },
+                  "type": {
+                    "title": "Channel Type",
+                    "description": "Whether the channel is TV or External (such as HDMI).",
+                    "type": "string",
+                    "minLength": 1,
+                    "required": true,
+                    "enum": ["tv", "external"]
+                  },
+                  "channel": {
+                    "type": "object",
+                    "properties": {
+                      "inputSourceType": {
+                        "type": "string",
+                        "title": "Input Source Type"
+                      },
+                      "inputSourceIdx": {
+                        "type": "string",
+                        "title": "Input Source Index"
+                      },
+                      "sourceIndex": {
+                        "type": "string",
+                        "title": "Source Index"
+                      },
+                      "physicalNum": {
+                        "type": "string",
+                        "title": "Physical Number"
+                      },
+                      "major": {
+                        "type": "string",
+                        "title": "Major"
+                      },
+                      "minor": {
+                        "type": "string",
+                        "title": "Minor"
+                      }
                     }
                   }
                 }
